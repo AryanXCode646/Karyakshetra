@@ -1,80 +1,119 @@
 import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { io } from "socket.io-client";
 
-const EditorArea = ({ content }) => {
-    const socket = io('https://karyak.vercel.app/api/server');
-    const [Content, setContent] = useState(content.content);
+const WEBSOCKET_URL = 'ws://localhost:8080';
+
+const EditorArea = ({ content, setContent, onContentChange }) => {
+    const [editorContent, setEditorContent] = useState(content.content);
+    const [isEditorReady, setIsEditorReady] = useState(false);
 
     useEffect(() => {
-        setContent(content.content);
+        setEditorContent(content.content);
     }, [content]);
 
-    const handleChange = (value) => {
-        setContent(value);
-        console.log(lang(content.name));
-        socket.emit('sendContent', { user: window.userId, groupid: window.groupId, Content: value, name: content.name });
+    const handleEditorChange = (value) => {
+        setEditorContent(value);
+        if (onContentChange) {
+            onContentChange(value);
+        }
     };
 
-    socket.on('deliveredContent', (data) => {
-        if (data.name === content.name) {
-            setContent(data.Content);
-        }
-    });
-
     const lang = (name) => {
+        if (!name) return 'plaintext';
         let split = name.split('.');
         const ext = split[split.length - 1];
 
-        switch (ext) {
+        switch (ext.toLowerCase()) {
             case 'js':
-            case 'jsx':
-            case 'tsx':
                 return 'javascript';
+            case 'jsx':
+                return 'javascriptreact';
+            case 'ts':
+                return 'typescript';
+            case 'tsx':
+                return 'typescriptreact';
             case 'html':
                 return 'html';
             case 'cpp':
+            case 'c':
                 return 'cpp';
             case 'py':
                 return 'python';
             case 'css':
                 return 'css';
+            case 'json':
+                return 'json';
+            case 'md':
+                return 'markdown';
             default:
-                return 'javascript'; // Default language
+                return 'plaintext';
         }
-    }
+    };
 
-    const onEditorMount = (editor, monaco) => {
+    const handleEditorDidMount = (editor, monaco) => {
+        setIsEditorReady(true);
+
         // Define a custom theme
-        monaco.editor.defineTheme('myCustomTheme', {
-            base: 'vs-dark', // Use vs-dark as a base
-            inherit: true, // Inherit other default styles
-            rules: [], // No custom token styles
+        monaco.editor.defineTheme('karyakshetraTheme', {
+            base: 'vs-dark',
+            inherit: true,
+            rules: [],
             colors: {
-                'editor.background': '#101C20', // Custom background color
-                'editor.foreground': '#879094', // Custom text color
+                'editor.background': '#1e1e1e',
+                'editor.foreground': '#d4d4d4',
+                'editor.lineHighlightBackground': '#2a2a2a',
+                'editor.selectionBackground': '#264f78',
+                'editor.inactiveSelectionBackground': '#3a3d41'
             }
         });
 
-        // Set the theme to the custom theme
-        monaco.editor.setTheme('myCustomTheme');
+        // Set the theme
+        monaco.editor.setTheme('karyakshetraTheme');
+
+        // Configure editor
+        editor.updateOptions({
+            fontSize: 14,
+            fontFamily: 'Consolas, "Courier New", monospace',
+            minimap: { enabled: true },
+            scrollBeyondLastLine: false,
+            renderWhitespace: 'selection',
+            quickSuggestions: true,
+            formatOnPaste: true,
+            formatOnType: true,
+            autoClosingBrackets: 'always',
+            autoClosingQuotes: 'always',
+            tabSize: 4,
+            lineNumbers: 'on',
+            wordWrap: 'on',
+            folding: true,
+            links: true,
+            contextmenu: true
+        });
     };
 
     return ( <
-        >
-        <
-        Editor height = "80vh"
-        width = "80vw"
-        defaultLanguage = "text"
+        div className = "h-full w-full overflow-hidden" > {!isEditorReady && ( <
+                div className = "flex items-center justify-center h-full" >
+                <
+                div className = "text-gray-400" > Loading editor... < /div> < /
+                div >
+            )
+        } <
+        Editor height = "100%"
+        defaultLanguage = "plaintext"
         language = { lang(content.name) }
-        theme = "myCustomTheme"
-        value = { Content }
-        onChange = { handleChange }
-        onMount = { onEditorMount }
-        className = "border-b-[1px] border-[#6b98ab] border-l-[1px] resize-x" /
-        >
-        <
-        />
+        theme = "karyakshetraTheme"
+        value = { editorContent }
+        onChange = { handleEditorChange }
+        onMount = { handleEditorDidMount }
+        options = {
+            {
+                readOnly: false,
+                automaticLayout: true
+            }
+        }
+        /> < /
+        div >
     );
 };
 

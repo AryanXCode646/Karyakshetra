@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import path from 'path'
+import fs from 'fs'
 
 // Custom APIs for renderer
 
@@ -16,6 +18,18 @@ const api = {
     sendTerminalInput: (input) => ipcRenderer.send('terminal-input', input),
     showDialog: (options) => ipcRenderer.invoke('showDialog', options),
     getQuickAccessPaths: () => ipcRenderer.invoke('getQuickAccessPaths'),
+    path: {
+        join: (...args) => path.join(...args),
+        basename: (filePath, ext) => path.basename(filePath, ext)
+    },
+    fileExists: (filePath) => {
+        try {
+            return fs.existsSync(filePath);
+        } catch (error) {
+            console.error('Error checking file existence:', error);
+            return false;
+        }
+    },
     onTerminalOutput: (callback) => {
         if (callback) {
             // Remove any existing listeners

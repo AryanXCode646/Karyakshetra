@@ -1,248 +1,257 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import 'xterm/css/xterm.css';
+import { FaTerminal, FaTimes, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 
-const TerminalComponent = ({ setIsVisible }) => {
+const TerminalComponent = ({ setIsVisible, isVisible }) => {
+    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [terminalHeight, setTerminalHeight] = useState(300);
     const terminalRef = useRef(null);
     const terminal = useRef(null);
+    const fitAddon = useRef(null);
+    const resizeRef = useRef(null);
+    const isResizing = useRef(false);
     const commandHistory = useRef([]);
     const historyIndex = useRef(-1);
-    const currentCommand = useRef('');
-    const currentPosition = useRef(0);
-    const isExecuting = useRef(false);
-    const activityTimeout = useRef(null);
+    const currentInput = useRef('');
+    const [isInitialized, setIsInitialized] = useState(false);
 
-    const hideIfInactive = () => {
-        if (!isExecuting.current && currentCommand.current === '') {
-            setIsVisible(false);
+    const initializeTerminal = () => {
+        if (!terminalRef.current) return;
+
+        if (terminal.current) {
+            terminal.current.dispose();
         }
-    };
 
-    const resetActivityTimer = () => {
-        if (activityTimeout.current) {
-            clearTimeout(activityTimeout.current);
-        }
-        // Hide terminal after 10 seconds of inactivity if not executing and no command in progress
-        activityTimeout.current = setTimeout(hideIfInactive, 10000);
-    };
+        // Clear the terminal container
+        terminalRef.current.innerHTML = '';
 
-    useEffect(() => {
-        // Initialize terminal
+        // Create a new terminal instance
         terminal.current = new Terminal({
             cursorBlink: true,
-            cursorStyle: 'block',
             fontSize: 14,
             fontFamily: 'Consolas, monospace',
             theme: {
                 background: '#1e1e1e',
-                foreground: '#d4d4d4',
-                cursor: '#d4d4d4',
-                selection: '#264f78',
-                black: '#000000',
-                red: '#cd3131',
-                green: '#0dbc79',
-                yellow: '#e5e510',
-                blue: '#2472c8',
-                magenta: '#bc3fbc',
-                cyan: '#11a8cd',
-                white: '#e5e5e5',
-                brightBlack: '#666666',
-                brightRed: '#f14c4c',
-                brightGreen: '#23d18b',
-                brightYellow: '#f5f543',
-                brightBlue: '#3b8eea',
-                brightMagenta: '#d670d6',
-                brightCyan: '#29b8db',
-                brightWhite: '#e5e5e5'
-            }
+                foreground: '#d4d4d4'
+            },
+            rows: 20,
+            scrollback: 1000,
+            convertEol: true
         });
 
-        // Add fit addon
-        const fitAddon = new FitAddon();
-        terminal.current.loadAddon(fitAddon);
+        // Create and attach addons
+        fitAddon.current = new FitAddon();
+        terminal.current.loadAddon(fitAddon.current);
+        terminal.current.loadAddon(new WebLinksAddon());
+        terminal.current.loadAddon(new SearchAddon());
 
-        // Add web links addon
-        const webLinksAddon = new WebLinksAddon();
-        terminal.current.loadAddon(webLinksAddon);
-
-        // Add search addon
-        const searchAddon = new SearchAddon();
-        terminal.current.loadAddon(searchAddon);
-
-        // Open terminal in container
+        // Open terminal in the container
         terminal.current.open(terminalRef.current);
-        fitAddon.fit();
 
-        // Write initial prompt
-        terminal.current.write('\r\n\x1b[1;36mKaryakshetra Terminal\x1b[0m');
-        terminal.current.write('\r\n$ ');
+        // Set up event handlers
+        terminal.current.onData(handleTerminalInput);
+        terminal.current.onKey(handleKeyPress);
 
-        // Handle window resize
-        const handleResize = () => {
-            fitAddon.fit();
-        };
-        window.addEventListener('resize', handleResize);
+        // Initial terminal text
+        terminal.current.write('\r\n\x1b[1;36mKaryakshetra Terminal\x1b[0m\r\n$ ');
 
-        const executeCommand = async(command) => {
-            isExecuting.current = true;
-            setIsVisible(true); // Show terminal when executing command
-            resetActivityTimer(); // Reset inactivity timer
-
-            if (command.startsWith('run ')) {
-                const filePath = command.slice(4).trim().replace(/^"(.*)"$/, '$1');
-                terminal.current.write(`\r\n\x1b[1;33mExecuting file: ${filePath}\x1b[0m\r\n`);
-
-                try {
-                    const result = await window.api.executeCode(filePath);
-                    if (result.error) {
-                        terminal.current.write(`\r\n\x1b[31mError: ${result.error}\x1b[0m\r\n`);
-                    }
-                } catch (error) {
-                    terminal.current.write(`\r\n\x1b[31mError: ${error.message}\x1b[0m\r\n`);
-                } finally {
-                    isExecuting.current = false;
-                    terminal.current.write('$ ');
-                    resetActivityTimer();
-                }
-            } else {
-                window.api.sendTerminalInput(command);
+        // Fit terminal to container
+        setTimeout(() => {
+            if (fitAddon.current) {
+                fitAddon.current.fit();
             }
-        };
+        }, 0);
 
-        // Handle terminal input
-        terminal.current.onData(data => {
-            resetActivityTimer(); // Reset inactivity timer on any input
-            const code = data.charCodeAt(0);
+        setIsInitialized(true);
+    };
 
-            // Don't process input while executing code
-            if (isExecuting.current && code !== 3) return;
+    const writePrompt = () => {
+        if (terminal.current) {
+            terminal.current.write('\r\n$ ');
+        }
+    };
 
-            // Handle special keys
-            if (code === 13) { // Enter
-                const command = currentCommand.current.trim();
+    const handleTerminalInput = (data) => {
+        if (!terminal.current) return;
+
+        switch (data) {
+            case '\r': // Enter
+                const command = currentInput.current.trim();
                 if (command) {
                     commandHistory.current.push(command);
                     historyIndex.current = commandHistory.current.length;
+                    terminal.current.write('\r\n');
                     executeCommand(command);
-                } else {
-                    terminal.current.write('\r\n$ ');
                 }
-                currentCommand.current = '';
-                currentPosition.current = 0;
-            } else if (code === 127) { // Backspace
-                if (currentPosition.current > 0) {
-                    currentCommand.current =
-                        currentCommand.current.slice(0, currentPosition.current - 1) +
-                        currentCommand.current.slice(currentPosition.current);
-                    currentPosition.current--;
+                currentInput.current = '';
+                writePrompt();
+                break;
+            case '\u007F': // Backspace
+                if (currentInput.current.length > 0) {
+                    currentInput.current = currentInput.current.slice(0, -1);
                     terminal.current.write('\b \b');
                 }
-            } else if (data === '\u001b[A') { // Up arrow
-                if (historyIndex.current > 0) {
-                    historyIndex.current--;
-                    currentCommand.current = commandHistory.current[historyIndex.current];
-                    terminal.current.write('\r\u001b[K$ ' + currentCommand.current);
-                    currentPosition.current = currentCommand.current.length;
-                }
-            } else if (data === '\u001b[B') { // Down arrow
-                if (historyIndex.current < commandHistory.current.length - 1) {
-                    historyIndex.current++;
-                    currentCommand.current = commandHistory.current[historyIndex.current];
-                    terminal.current.write('\r\u001b[K$ ' + currentCommand.current);
-                    currentPosition.current = currentCommand.current.length;
-                } else if (historyIndex.current === commandHistory.current.length - 1) {
-                    historyIndex.current++;
-                    currentCommand.current = '';
-                    terminal.current.write('\r\u001b[K$ ');
-                    currentPosition.current = 0;
-                }
-            } else if (data === '\u001b[C') { // Right arrow
-                if (currentPosition.current < currentCommand.current.length) {
-                    currentPosition.current++;
-                    terminal.current.write(data);
-                }
-            } else if (data === '\u001b[D') { // Left arrow
-                if (currentPosition.current > 0) {
-                    currentPosition.current--;
-                    terminal.current.write(data);
-                }
-            } else if (code === 3) { // Ctrl+C
-                isExecuting.current = false;
-                terminal.current.write('^C\r\n$ ');
-                currentCommand.current = '';
-                currentPosition.current = 0;
-                resetActivityTimer();
-            } else if (code >= 32 && code <= 126) { // Printable characters
-                currentCommand.current =
-                    currentCommand.current.slice(0, currentPosition.current) +
-                    data +
-                    currentCommand.current.slice(currentPosition.current);
-                currentPosition.current++;
+                break;
+            default:
+                currentInput.current += data;
                 terminal.current.write(data);
+        }
+    };
+
+    const handleKeyPress = (e) => {
+        if (!terminal.current) return;
+
+        const ev = e.domEvent;
+        const printable = !ev.altKey && !ev.ctrlKey && !ev.metaKey;
+
+        if (ev.keyCode === 38) { // Up arrow
+            ev.preventDefault();
+            if (historyIndex.current > 0) {
+                historyIndex.current--;
+                showHistoryCommand();
             }
-        });
-
-        // Handle terminal output with color support
-        window.api.onTerminalOutput((data) => {
-            setIsVisible(true); // Show terminal when there's output
-            resetActivityTimer(); // Reset inactivity timer
-            if (data.includes('\x1b[')) {
-                terminal.current.write(data);
-            } else {
-                terminal.current.write(data);
-            }
-            if (!isExecuting.current) {
-                terminal.current.write('\r\n$ ');
-            }
-        });
-
-        // Handle terminal error output
-        window.api.onTerminalError((data) => {
-            setIsVisible(true); // Show terminal when there's an error
-            resetActivityTimer(); // Reset inactivity timer
-            terminal.current.write(`\x1b[31m${data}\x1b[0m`);
-            if (!isExecuting.current) {
-                terminal.current.write('\r\n$ ');
-            }
-        });
-
-        // Handle terminal exit
-        window.api.onTerminalExit((code) => {
-            const color = code === 0 ? '\x1b[32m' : '\x1b[31m';
-            terminal.current.write(`\r\n${color}Process exited with code ${code}\x1b[0m\r\n$ `);
-            isExecuting.current = false;
-            resetActivityTimer(); // Reset inactivity timer
-        });
-
-        // Start initial inactivity timer
-        resetActivityTimer();
-
-        return () => {
-            window.removeEventListener('resize', handleResize);
-            terminal.current.dispose();
-            window.api.onTerminalOutput(null);
-            window.api.onTerminalError(null);
-            window.api.onTerminalExit(null);
-            if (activityTimeout.current) {
-                clearTimeout(activityTimeout.current);
-            }
-        };
-    }, [setIsVisible]);
-
-    return ( <
-        div ref = { terminalRef }
-        style = {
-            {
-                height: '20vh',
-                width: '100%',
-                backgroundColor: '#1e1e1e',
-                padding: '8px'
+        } else if (ev.keyCode === 40) { // Down arrow
+            ev.preventDefault();
+            if (historyIndex.current < commandHistory.current.length) {
+                historyIndex.current++;
+                showHistoryCommand();
             }
         }
-        />
+    };
+
+    const showHistoryCommand = () => {
+        if (!terminal.current) return;
+
+        const command = historyIndex.current < commandHistory.current.length ?
+            commandHistory.current[historyIndex.current] :
+            '';
+
+        terminal.current.write('\r$ ' + ' '.repeat(currentInput.current.length) + '\r$ ' + command);
+        currentInput.current = command;
+    };
+
+    const executeCommand = (command) => {
+        if (!terminal.current) return;
+        terminal.current.write(`Command not found: ${command}\r\n`);
+    };
+
+    // Initialize terminal when component mounts or becomes visible
+    useEffect(() => {
+        if (isVisible && !isInitialized) {
+            initializeTerminal();
+        }
+
+        if (isVisible && terminal.current && fitAddon.current) {
+            setTimeout(() => {
+                fitAddon.current.fit();
+            }, 100);
+        }
+    }, [isVisible, isInitialized]);
+
+    // Handle terminal visibility changes
+    useEffect(() => {
+        if (isVisible && isInitialized && !isCollapsed && fitAddon.current) {
+            setTimeout(() => {
+                fitAddon.current.fit();
+            }, 100);
+        }
+    }, [isVisible, isInitialized, isCollapsed]);
+
+    // Handle window resize
+    useEffect(() => {
+        const handleResize = () => {
+            if (fitAddon.current && !isCollapsed) {
+                fitAddon.current.fit();
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [isCollapsed]);
+
+    const startResize = (e) => {
+        isResizing.current = true;
+        document.body.style.cursor = 'ns-resize';
+    };
+
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            if (!isResizing.current) return;
+            const newHeight = window.innerHeight - e.clientY;
+            if (newHeight >= 100 && newHeight <= window.innerHeight * 0.8) {
+                setTerminalHeight(newHeight);
+                if (fitAddon.current) {
+                    setTimeout(() => fitAddon.current.fit(), 0);
+                }
+            }
+        };
+
+        const handleMouseUp = () => {
+            isResizing.current = false;
+            document.body.style.cursor = 'default';
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, []);
+
+    const toggleCollapse = () => {
+        setIsCollapsed(!isCollapsed);
+    };
+
+    if (!isVisible) return null;
+
+    return ( <
+        div className = { `fixed bottom-0 left-0 right-0 bg-gray-900 text-white transition-all duration-300 ease-in-out ${
+                isCollapsed ? 'h-10' : ''
+            }` }
+        style = {
+            { height: isCollapsed ? '40px' : `${terminalHeight}px` }
+        } >
+        <
+        div ref = { resizeRef }
+        className = "absolute top-0 left-0 right-0 h-1 bg-gray-700 cursor-ns-resize"
+        onMouseDown = { startResize }
+        /> <
+        div className = "flex items-center justify-between p-2 bg-gray-800 border-b border-gray-700" >
+        <
+        div className = "flex items-center space-x-2" >
+        <
+        FaTerminal className = "text-green-500" / >
+        <
+        span className = "font-semibold" > Terminal < /span> < /
+        div > <
+        div className = "flex items-center space-x-2" >
+        <
+        button onClick = { toggleCollapse }
+        className = "p-1 hover:bg-gray-700 rounded" > { isCollapsed ? < FaChevronUp / > : < FaChevronDown / > } <
+        /button> <
+        button onClick = {
+            () => setIsVisible(false)
+        }
+        className = "p-1 hover:bg-gray-700 rounded" >
+        <
+        FaTimes / >
+        <
+        /button> < /
+        div > <
+        /div> <
+        div ref = { terminalRef }
+        className = { `h-[calc(100%-40px)] ${isCollapsed ? 'hidden' : ''}` }
+        style = {
+            { display: isCollapsed ? 'none' : 'block' }
+        }
+        /> < /
+        div >
     );
 };
 

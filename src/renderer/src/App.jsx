@@ -66,7 +66,7 @@ const App = () => {
                 setConnectedUsers(data.users);
                 break;
             case 'code_change':
-                if (data.clientId !== clientId && data.path === selectedFile?.path) {
+                if (data.clientId !== clientId && data.path === (selectedFile && selectedFile.path)) {
                     setContent(prev => ({
                         ...prev,
                         content: data.content
@@ -78,7 +78,7 @@ const App = () => {
                 // Handle other users' cursor positions
                 break;
             case 'file_content':
-                if (data.path === selectedFile?.path) {
+                if (data.path === (selectedFile && selectedFile.path)) {
                     setContent(prev => ({
                         ...prev,
                         content: data.content
@@ -291,38 +291,54 @@ const App = () => {
         // Implement settings dialog
     };
 
-    return (
-        <div className="flex flex-col h-screen bg-gray-900 text-white">
-            <Navbar
-                onCommandExecution={handleCommandExecution}
-                isCommandPaletteOpen={isCommandPaletteOpen}
-                setIsCommandPaletteOpen={setIsCommandPaletteOpen}
-            />
-            <div className="flex-1 flex">
-                <FileExplorer ref={fileExplorerRef} onFileOpen={handleFileOpen} />
-                <div className="flex-1 flex flex-col">
-                    <EditorArea
-                        content={content}
-                        setContent={setContent}
-                        onContentChange={broadcastCodeChange}
+    return ( <
+            div className = "flex flex-col h-screen bg-gray-900 text-white overflow-hidden" >
+            <
+            Navbar onCommandExecution = { handleCommandExecution }
+            isCommandPaletteOpen = { isCommandPaletteOpen }
+            setIsCommandPaletteOpen = { setIsCommandPaletteOpen }
+            /> <
+            div className = "flex flex-1 overflow-hidden" >
+            <
+            div className = "w-64 border-r border-gray-700" >
+            <
+            FileExplorer ref = { fileExplorerRef }
+            onFileOpen = { handleFileOpen }
+            /> < /
+            div > <
+            div className = "flex-1 flex flex-col overflow-hidden" >
+            <
+            div className = "flex-1 overflow-hidden" >
+            <
+            EditorArea content = { content }
+            setContent = { setContent }
+            onContentChange = { broadcastCodeChange }
+            /> < /
+            div > {
+                isTerminalVisible && ( <
+                    TerminalComponent isVisible = { isTerminalVisible }
+                    setIsVisible = { setIsTerminalVisible }
                     />
-                    {isTerminalVisible && <TerminalComponent />}
-                </div>
-            </div>
-            <StatusBar
-                lineCount={lineCount}
-                errorCount={errorCount}
-                warningCount={warningCount}
-                connectedUsers={connectedUsers}
-            />
-            {isCommandPaletteOpen && (
-                <CommandPalette
-                    onClose={() => setIsCommandPaletteOpen(false)}
-                    onCommandSelect={handleCommandExecution}
+                )
+            } <
+            /div> < /
+            div > <
+            StatusBar lineCount = { lineCount }
+            errorCount = { errorCount }
+            warningCount = { warningCount }
+            connectedUsers = { connectedUsers }
+            /> {
+            isCommandPaletteOpen && ( <
+                CommandPalette isOpen = { isCommandPaletteOpen }
+                onClose = {
+                    () => setIsCommandPaletteOpen(false)
+                }
+                onExecuteCommand = { handleCommandExecution }
                 />
-            )}
-        </div>
-    );
+            )
+        } <
+        /div>
+);
 };
 
-export default App; 
+export default App;

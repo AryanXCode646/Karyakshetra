@@ -3,7 +3,7 @@ import { faArrowLeft, faSave, faFolderOpen, faPlus, faPlay, faHome, faDesktop } 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import NewFileDialog from './NewFileDialog';
 
-const FileExplorer = forwardRef(({ setcontent }, ref) => {
+const FileExplorer = forwardRef(({ onFileOpen }, ref) => {
     const [files, setFiles] = useState([]);
     const [currentPath, setCurrentPath] = useState('');
     const [optionOpened, setoptionOpened] = useState(false);
@@ -73,9 +73,9 @@ const FileExplorer = forwardRef(({ setcontent }, ref) => {
     };
 
     const changeValue = async(file) => {
-        let data = await window.api.getContent(file.path);
-        data = {...data, name: file.name };
-        setcontent(data);
+        if (onFileOpen) {
+            onFileOpen(file.path, file.name);
+        }
         setSelectedFile(file);
     };
 

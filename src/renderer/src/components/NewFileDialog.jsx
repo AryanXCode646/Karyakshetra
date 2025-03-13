@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import path from 'path';
 
 const LANGUAGE_TEMPLATES = {
     'JavaScript': { ext: '.js', template: '// JavaScript file\n\n' },
@@ -48,7 +47,7 @@ const NewFileDialog = ({ isOpen, onClose, currentPath, onFileCreated }) => {
 
             const template = LANGUAGE_TEMPLATES[selectedLanguage];
             const fileNameWithExt = fileName.endsWith(template.ext) ? fileName : fileName + template.ext;
-            const filePath = path.join(currentPath, fileNameWithExt);
+            const filePath = window.api.path.join(currentPath, fileNameWithExt);
 
             // Check if file already exists
             const fileExists = await window.api.fileExists(filePath);
@@ -60,7 +59,7 @@ const NewFileDialog = ({ isOpen, onClose, currentPath, onFileCreated }) => {
             // Create the file
             const result = await window.api.createFile({
                 filePath,
-                content: template.template.replace('ClassName', path.basename(fileName, template.ext))
+                content: template.template.replace('ClassName', window.api.path.basename(fileName, template.ext))
             });
 
             if (result.error) {
