@@ -1,0 +1,634 @@
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #1e1e1e;
+    color: #ffffff;
+    height: 100vh;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, Ubuntu, 'Droid Sans', sans-serif;
+}
+
+.app-container {
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.theme-light {
+    background-color: #ffffff;
+    color: #000000;
+}
+
+.theme-dark {
+    background-color: #1e1e1e;
+    color: #ffffff;
+}
+
+.theme-dark .activity-bar {
+    background-color: #333333;
+}
+
+.theme-dark .activity-icon {
+    color: #858585;
+}
+
+.theme-dark .activity-icon:hover {
+    color: #ffffff;
+}
+
+.theme-dark .activity-icon.active {
+    color: #ffffff;
+    border-left-color: #ffffff;
+}
+
+.theme-dark .sidebar {
+    background-color: #252526;
+    border-right-color: #3c3c3c;
+}
+
+.theme-dark .sidebar-header {
+    background-color: #333333;
+    color: #cccccc;
+}
+
+.theme-dark .file-item {
+    color: #cccccc;
+}
+
+.theme-dark .file-item:hover {
+    background-color: #2a2d2e;
+}
+
+.theme-dark .search-input {
+    background-color: #3c3c3c;
+    border-color: #3c3c3c;
+    color: #cccccc;
+}
+
+.theme-dark .editor-header {
+    background-color: #252526;
+    border-bottom-color: #3c3c3c;
+}
+
+.theme-dark .file-tabs {
+    background-color: #252526;
+}
+
+.theme-dark .file-tab {
+    background-color: #2d2d2d;
+    border-right-color: #3c3c3c;
+    color: #969696;
+}
+
+.theme-dark .file-tab.active {
+    background-color: #1e1e1e;
+    color: #ffffff;
+    border-top-color: #007acc;
+}
+
+.theme-dark .close-tab {
+    color: #969696;
+}
+
+.theme-dark .close-tab:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.theme-dark .editor-toolbar {
+    background-color: #333333;
+}
+
+.theme-dark .editor-container {
+    background-color: #1e1e1e;
+}
+
+.theme-dark .terminal-container {
+    background-color: #1e1e1e;
+    border-top-color: #3c3c3c;
+}
+
+.theme-dark .terminal-header {
+    background-color: #333333;
+    color: #cccccc;
+}
+
+.theme-dark .terminal-toggle {
+    color: #cccccc;
+}
+
+.theme-dark .terminal-toggle:hover {
+    color: #ffffff;
+}
+
+.theme-dark .select-input {
+    background-color: #3c3c3c;
+    color: #cccccc;
+    border-color: #3c3c3c;
+}
+
+.theme-dark .select-input:focus {
+    border-color: #007acc;
+}
+
+.theme-light .activity-bar {
+    background-color: #f3f3f3;
+}
+
+.theme-light .activity-icon {
+    color: #424242;
+}
+
+.theme-light .activity-icon:hover {
+    color: #000000;
+}
+
+.theme-light .activity-icon.active {
+    color: #000000;
+    border-left-color: #000000;
+}
+
+.theme-light .sidebar {
+    background-color: #f3f3f3;
+    border-right-color: #e0e0e0;
+}
+
+.theme-light .sidebar-header {
+    background-color: #f3f3f3;
+    color: #424242;
+}
+
+.theme-light .file-item {
+    color: #424242;
+}
+
+.theme-light .file-item:hover {
+    background-color: #e8e8e8;
+}
+
+.theme-light .search-input {
+    background-color: #ffffff;
+    border-color: #e0e0e0;
+    color: #424242;
+}
+
+.theme-light .editor-header {
+    background-color: #f3f3f3;
+    border-bottom-color: #e0e0e0;
+}
+
+.theme-light .file-tabs {
+    background-color: #f3f3f3;
+}
+
+.theme-light .file-tab {
+    background-color: #f3f3f3;
+    border-right-color: #e0e0e0;
+    color: #424242;
+}
+
+.theme-light .file-tab.active {
+    background-color: #ffffff;
+    color: #000000;
+    border-top-color: #007acc;
+}
+
+.theme-light .close-tab {
+    color: #424242;
+}
+
+.theme-light .close-tab:hover {
+    color: #000000;
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.theme-light .editor-toolbar {
+    background-color: #f3f3f3;
+}
+
+.theme-light .editor-container {
+    background-color: #ffffff;
+}
+
+.theme-light .terminal-container {
+    background-color: #ffffff;
+    border-top-color: #e0e0e0;
+}
+
+.theme-light .terminal-header {
+    background-color: #f3f3f3;
+    color: #424242;
+}
+
+.theme-light .terminal-toggle {
+    color: #424242;
+}
+
+.theme-light .terminal-toggle:hover {
+    color: #000000;
+}
+
+.theme-light .select-input {
+    background-color: #ffffff;
+    color: #424242;
+    border-color: #e0e0e0;
+}
+
+.theme-light .select-input:focus {
+    border-color: #007acc;
+}
+
+
+/* Command Palette */
+
+.command-palette {
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    background-color: #252526;
+    border: 1px solid #3c3c3c;
+    border-radius: 3px;
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+}
+
+.command-input {
+    width: 100%;
+    padding: 8px 12px;
+    background-color: #3c3c3c;
+    border: none;
+    color: #ffffff;
+    font-size: 14px;
+}
+
+.command-input:focus {
+    outline: none;
+}
+
+
+/* Main Layout */
+
+.main-wrapper {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+
+/* Activity Bar */
+
+.activity-bar {
+    width: 48px;
+    background-color: #333333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 10px;
+}
+
+.logo-container {
+    padding: 10px;
+    margin-bottom: 20px;
+}
+
+.logo {
+    width: 32px;
+    height: 32px;
+}
+
+.activity-icons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.activity-icon {
+    width: 48px;
+    height: 48px;
+    background: none;
+    border: none;
+    color: #858585;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.activity-icon:hover {
+    color: #ffffff;
+}
+
+.activity-icon.active {
+    color: #ffffff;
+    border-left: 2px solid #ffffff;
+}
+
+
+/* Main Content */
+
+.main-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+
+/* Sidebar */
+
+.sidebar {
+    width: 300px;
+    background-color: #252526;
+    border-right: 1px solid #3c3c3c;
+    display: flex;
+    flex-direction: column;
+    transition: width 0.3s;
+}
+
+.sidebar:not(.open) {
+    width: 0;
+    overflow: hidden;
+}
+
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: #333333;
+    color: #cccccc;
+    font-size: 11px;
+    font-weight: 400;
+    text-transform: uppercase;
+}
+
+.sidebar-title {
+    display: flex;
+    align-items: center;
+}
+
+.sidebar-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.sidebar-actions button {
+    background: none;
+    border: none;
+    color: #cccccc;
+    cursor: pointer;
+    padding: 4px;
+}
+
+.sidebar-actions button:hover {
+    color: #ffffff;
+}
+
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+
+/* File Explorer */
+
+.file-explorer {
+    padding: 8px;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: #cccccc;
+    font-size: 13px;
+}
+
+.file-item:hover {
+    background-color: #2a2d2e;
+}
+
+.file-item i {
+    font-size: 14px;
+    width: 16px;
+}
+
+
+/* Search */
+
+.search-container {
+    padding: 8px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 4px 8px;
+    background-color: #3c3c3c;
+    border: 1px solid #3c3c3c;
+    color: #cccccc;
+    font-size: 13px;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #007acc;
+}
+
+
+/* Editor Area */
+
+.editor-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.editor-header {
+    background-color: #252526;
+    border-bottom: 1px solid #3c3c3c;
+}
+
+.file-tabs {
+    display: flex;
+    background-color: #252526;
+    padding: 0 10px;
+    height: 35px;
+    align-items: center;
+    overflow-x: auto;
+}
+
+.file-tabs::-webkit-scrollbar {
+    height: 3px;
+}
+
+.file-tabs::-webkit-scrollbar-thumb {
+    background-color: #424242;
+}
+
+.file-tab {
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    height: 35px;
+    background-color: #2d2d2d;
+    border-right: 1px solid #3c3c3c;
+    color: #969696;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.file-tab.active {
+    background-color: #1e1e1e;
+    color: #ffffff;
+    border-top: 1px solid #007acc;
+}
+
+.close-tab {
+    background: none;
+    border: none;
+    color: #969696;
+    margin-left: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 4px;
+}
+
+.close-tab:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.editor-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 5px 10px;
+    gap: 10px;
+    background-color: #333333;
+}
+
+.editor-container {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.editor-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 16px;
+    color: #666;
+}
+
+
+/* Terminal */
+
+.terminal-container {
+    height: 300px;
+    background-color: #1e1e1e;
+    border-top: 1px solid #3c3c3c;
+    display: flex;
+    flex-direction: column;
+    transition: height 0.3s;
+}
+
+.terminal-container:not(.open) {
+    height: 0;
+    overflow: hidden;
+}
+
+.terminal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    background-color: #333333;
+    color: #cccccc;
+    font-size: 11px;
+    font-weight: 400;
+    text-transform: uppercase;
+}
+
+.terminal-toggle {
+    background: none;
+    border: none;
+    color: #cccccc;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 4px;
+}
+
+.terminal-toggle:hover {
+    color: #ffffff;
+}
+
+.terminal {
+    flex: 1;
+    padding: 5px;
+}
+
+
+/* Status Bar */
+
+.status-bar {
+    height: 22px;
+    background-color: #007acc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 12px;
+    color: #ffffff;
+}
+
+.status-left,
+.status-right {
+    display: flex;
+    gap: 16px;
+}
+
+
+/* Input styling */
+
+.select-input {
+    background-color: #3c3c3c;
+    color: #cccccc;
+    border: 1px solid #3c3c3c;
+    padding: 4px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.select-input:focus {
+    outline: none;
+    border-color: #007acc;
+}
+
+.run-button {
+    background-color: #007acc;
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background-color 0.2s;
+}
+
+.run-button:hover {
+    background-color: #1f8ad2;
+}
