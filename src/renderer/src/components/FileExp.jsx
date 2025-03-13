@@ -133,20 +133,58 @@ const FileExplorer = forwardRef(({ onFileOpen }, ref) => {
         }
     };
 
+    const getRunCommand = (file) => {
+        if (!file) return null;
+        const ext = file.name.toLowerCase().split('.').pop();
+
+        const commands = {
+            'js': `node "${file.path}"`,
+            'ts': `ts-node "${file.path}"`,
+            'py': `python "${file.path}"`,
+            'java': `javac "${file.path}" && java "${file.path.replace('.java', '')}"`,
+            'cpp': `g++ "${file.path}" -o "${file.path}.exe" && "${file.path}.exe"`,
+            'c': `gcc "${file.path}" -o "${file.path}.exe" && "${file.path}.exe"`,
+            'rb': `ruby "${file.path}"`,
+            'go': `go run "${file.path}"`,
+            'php': `php "${file.path}"`,
+            'sh': `bash "${file.path}"`,
+            'ps1': `powershell -File "${file.path}"`,
+            'bat': `"${file.path}"`
+        };
+
+        return commands[ext] || null;
+    };
+
     const handleRunFile = async() => {
         if (!selectedFile || selectedFile.isDirectory) return;
 
         try {
-            window.api.sendTerminalInput(`run "${selectedFile.path}"`);
+            const command = getRunCommand(selectedFile);
+            if (!command) {
+                console.error('Unsupported file type');
+                return;
+            }
+
+            // Make terminal visible if it's not
+            window.dispatchEvent(new CustomEvent('show-terminal', {
+                detail: { show: true }
+            }));
+
+            // Dispatch command to terminal
+            window.dispatchEvent(new CustomEvent('write-to-terminal', {
+                detail: { command }
+            }));
         } catch (error) {
             console.error('Error executing file:', error);
-            window.api.sendTerminalInput(`echo "\x1b[31mError executing file: ${error.message}\x1b[0m"`);
         }
     };
 
     const isExecutableFile = (file) => {
         if (!file || file.isDirectory) return false;
-        const executableExtensions = ['.js', '.ts', '.py', '.java', '.cpp', '.c', '.rb', '.go', '.php'];
+        const executableExtensions = [
+            '.js', '.ts', '.py', '.java', '.cpp', '.c',
+            '.rb', '.go', '.php', '.sh', '.ps1', '.bat'
+        ];
         return executableExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
     };
 

@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
 import path from 'path'
 import fs from 'fs'
 
@@ -31,33 +30,44 @@ const api = {
         }
     },
     onTerminalOutput: (callback) => {
-        if (callback) {
-            // Remove any existing listeners
-            ipcRenderer.removeAllListeners('terminal-output');
-            // Add new listener
-            ipcRenderer.on('terminal-output', (_, data) => callback(data));
-            return () => ipcRenderer.removeAllListeners('terminal-output');
-        }
+        const listener = (event, data) => callback(data);
+        ipcRenderer.on('terminal-output', listener);
+        return () => ipcRenderer.removeListener('terminal-output', listener);
     },
     onTerminalError: (callback) => {
-        if (callback) {
-            // Remove any existing listeners
-            ipcRenderer.removeAllListeners('terminal-error');
-            // Add new listener
-            ipcRenderer.on('terminal-error', (_, data) => callback(data));
-            return () => ipcRenderer.removeAllListeners('terminal-error');
-        }
+        const listener = (event, data) => callback(data);
+        ipcRenderer.on('terminal-error', listener);
+        return () => ipcRenderer.removeListener('terminal-error', listener);
     },
     onTerminalExit: (callback) => {
-        if (callback) {
-            // Remove any existing listeners
-            ipcRenderer.removeAllListeners('terminal-exit');
-            // Add new listener
-            ipcRenderer.on('terminal-exit', (_, code) => callback(code));
-            return () => ipcRenderer.removeAllListeners('terminal-exit');
-        }
-    },
+        const listener = (event, code) => callback(code);
+        ipcRenderer.on('terminal-exit', listener);
+        return () => ipcRenderer.removeListener('terminal-exit', listener);
+    }
 }
+
+const electronAPI = {
+    ipcRenderer: {
+        send: (channel, data) => {
+            const validChannels = ['terminal-create', 'terminal-input'];
+            if (validChannels.includes(channel)) {
+                ipcRenderer.send(channel, data);
+            }
+        },
+        on: (channel, func) => {
+            const validChannels = ['terminal-output', 'terminal-error'];
+            if (validChannels.includes(channel)) {
+                ipcRenderer.on(channel, func);
+            }
+        },
+        removeListener: (channel, func) => {
+            const validChannels = ['terminal-output', 'terminal-error'];
+            if (validChannels.includes(channel)) {
+                ipcRenderer.removeListener(channel, func);
+            }
+        }
+    }
+};
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise

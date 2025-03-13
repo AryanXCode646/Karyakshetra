@@ -1,226 +1,195 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Terminal } from 'xterm';
+import React, { useEffect, useRef, useState } from 'react';
+import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { SearchAddon } from '@xterm/addon-search';
 import 'xterm/css/xterm.css';
 import { FaTerminal, FaTimes, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 
-const TerminalComponent = ({ setIsVisible, isVisible }) => {
+const Terminal = () => {
+    const terminalRef = useRef(null);
+    const xtermRef = useRef(null);
+    const [isVisible, setIsVisible] = useState(true);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [terminalHeight, setTerminalHeight] = useState(300);
-    const terminalRef = useRef(null);
-    const terminal = useRef(null);
-    const fitAddon = useRef(null);
-    const resizeRef = useRef(null);
-    const isResizing = useRef(false);
-    const commandHistory = useRef([]);
-    const historyIndex = useRef(-1);
-    const currentInput = useRef('');
-    const [isInitialized, setIsInitialized] = useState(false);
+    const currentLineRef = useRef('');
+    const commandHistoryRef = useRef([]);
+    const historyIndexRef = useRef(-1);
 
-    const initializeTerminal = () => {
-        if (!terminalRef.current) return;
+    useEffect(() => {
+        if (!terminalRef.current || !isVisible || isCollapsed) return;
 
-        if (terminal.current) {
-            terminal.current.dispose();
-        }
-
-        // Clear the terminal container
-        terminalRef.current.innerHTML = '';
-
-        // Create a new terminal instance
-        terminal.current = new Terminal({
-            cursorBlink: true,
-            fontSize: 14,
-            fontFamily: 'Consolas, monospace',
+        const xterm = new XTerm({
+            rows: 24,
+            cols: 80,
             theme: {
                 background: '#1e1e1e',
-                foreground: '#d4d4d4'
+                foreground: '#ffffff',
+                cursor: '#ffffff',
+                selection: '#5c5c5c',
+                black: '#000000',
+                red: '#cd3131',
+                green: '#0dbc79',
+                yellow: '#e5e510',
+                blue: '#2472c8',
+                magenta: '#bc3fbc',
+                cyan: '#11a8cd',
+                white: '#e5e5e5',
+                brightBlack: '#666666',
+                brightRed: '#f14c4c',
+                brightGreen: '#23d18b',
+                brightYellow: '#f5f543',
+                brightBlue: '#3b8eea',
+                brightMagenta: '#d670d6',
+                brightCyan: '#29b8db',
+                brightWhite: '#e5e5e5'
             },
-            rows: 20,
+            cursorBlink: true,
+            cursorStyle: 'block',
             scrollback: 1000,
-            convertEol: true
+            fontFamily: 'Consolas, monospace',
+            fontSize: 14,
+            convertEol: true,
+            windowsMode: true
         });
 
-        // Create and attach addons
-        fitAddon.current = new FitAddon();
-        terminal.current.loadAddon(fitAddon.current);
-        terminal.current.loadAddon(new WebLinksAddon());
-        terminal.current.loadAddon(new SearchAddon());
+        const fitAddon = new FitAddon();
+        xterm.loadAddon(fitAddon);
+        xterm.loadAddon(new WebLinksAddon());
 
-        // Open terminal in the container
-        terminal.current.open(terminalRef.current);
+        xterm.open(terminalRef.current);
+        fitAddon.fit();
+        xterm.focus();
 
-        // Set up event handlers
-        terminal.current.onData(handleTerminalInput);
-        terminal.current.onKey(handleKeyPress);
+        xtermRef.current = xterm;
 
-        // Initial terminal text
-        terminal.current.write('\r\n\x1b[1;36mKaryakshetra Terminal\x1b[0m\r\n$ ');
+        window.electron.ipcRenderer.send('terminal-create');
 
-        // Fit terminal to container
-        setTimeout(() => {
-            if (fitAddon.current) {
-                fitAddon.current.fit();
-            }
-        }, 0);
+        const handleData = (data) => {
+            let handled = false;
 
-        setIsInitialized(true);
-    };
-
-    const writePrompt = () => {
-        if (terminal.current) {
-            terminal.current.write('\r\n$ ');
-        }
-    };
-
-    const handleTerminalInput = (data) => {
-        if (!terminal.current) return;
-
-        switch (data) {
-            case '\r': // Enter
-                const command = currentInput.current.trim();
+            if (data === '\r') { // Enter
+                const command = currentLineRef.current.trim();
                 if (command) {
-                    commandHistory.current.push(command);
-                    historyIndex.current = commandHistory.current.length;
-                    terminal.current.write('\r\n');
-                    executeCommand(command);
+                    commandHistoryRef.current.push(command);
+                    historyIndexRef.current = commandHistoryRef.current.length;
+                    window.electron.ipcRenderer.send('terminal-input', command);
+                } else {
+                    xterm.write('\r\n');
                 }
-                currentInput.current = '';
-                writePrompt();
-                break;
-            case '\u007F': // Backspace
-                if (currentInput.current.length > 0) {
-                    currentInput.current = currentInput.current.slice(0, -1);
-                    terminal.current.write('\b \b');
+                currentLineRef.current = '';
+                handled = true;
+            } else if (data === '\u007F') { // Backspace
+                if (currentLineRef.current.length > 0) {
+                    currentLineRef.current = currentLineRef.current.slice(0, -1);
+                    xterm.write('\b \b');
                 }
-                break;
-            default:
-                currentInput.current += data;
-                terminal.current.write(data);
-        }
-    };
-
-    const handleKeyPress = (e) => {
-        if (!terminal.current) return;
-
-        const ev = e.domEvent;
-        const printable = !ev.altKey && !ev.ctrlKey && !ev.metaKey;
-
-        if (ev.keyCode === 38) { // Up arrow
-            ev.preventDefault();
-            if (historyIndex.current > 0) {
-                historyIndex.current--;
-                showHistoryCommand();
+                handled = true;
+            } else if (data === '\u0003') { // Ctrl+C
+                window.electron.ipcRenderer.send('terminal-input', '\x03');
+                currentLineRef.current = '';
+                handled = true;
+            } else if (data === '\u001b[A') { // Up arrow
+                if (historyIndexRef.current > 0) {
+                    historyIndexRef.current--;
+                    // Clear current line
+                    while (currentLineRef.current.length > 0) {
+                        xterm.write('\b \b');
+                        currentLineRef.current = currentLineRef.current.slice(0, -1);
+                    }
+                    // Show command from history
+                    currentLineRef.current = commandHistoryRef.current[historyIndexRef.current];
+                    xterm.write(currentLineRef.current);
+                }
+                handled = true;
+            } else if (data === '\u001b[B') { // Down arrow
+                if (historyIndexRef.current < commandHistoryRef.current.length) {
+                    historyIndexRef.current++;
+                    // Clear current line
+                    while (currentLineRef.current.length > 0) {
+                        xterm.write('\b \b');
+                        currentLineRef.current = currentLineRef.current.slice(0, -1);
+                    }
+                    // Show command from history or empty if at the end
+                    currentLineRef.current = historyIndexRef.current < commandHistoryRef.current.length ?
+                        commandHistoryRef.current[historyIndexRef.current] : '';
+                    xterm.write(currentLineRef.current);
+                }
+                handled = true;
             }
-        } else if (ev.keyCode === 40) { // Down arrow
-            ev.preventDefault();
-            if (historyIndex.current < commandHistory.current.length) {
-                historyIndex.current++;
-                showHistoryCommand();
+
+            if (!handled && data >= String.fromCharCode(32) && data <= String.fromCharCode(126)) {
+                currentLineRef.current += data;
+                xterm.write(data);
             }
-        }
-    };
+        };
 
-    const showHistoryCommand = () => {
-        if (!terminal.current) return;
+        xterm.onData(handleData);
 
-        const command = historyIndex.current < commandHistory.current.length ?
-            commandHistory.current[historyIndex.current] :
-            '';
+        const handleOutput = (_, data) => {
+            if (xterm && !xterm.disposed) {
+                xterm.write(data);
+            }
+        };
 
-        terminal.current.write('\r$ ' + ' '.repeat(currentInput.current.length) + '\r$ ' + command);
-        currentInput.current = command;
-    };
+        const handleError = (_, error) => {
+            if (xterm && !xterm.disposed) {
+                xterm.write(`\x1b[31m${error}\x1b[0m`);
+            }
+        };
 
-    const executeCommand = (command) => {
-        if (!terminal.current) return;
-        terminal.current.write(`Command not found: ${command}\r\n`);
-    };
+        window.electron.ipcRenderer.on('terminal-output', handleOutput);
+        window.electron.ipcRenderer.on('terminal-error', handleError);
 
-    // Initialize terminal when component mounts or becomes visible
-    useEffect(() => {
-        if (isVisible && !isInitialized) {
-            initializeTerminal();
-        }
-
-        if (isVisible && terminal.current && fitAddon.current) {
-            setTimeout(() => {
-                fitAddon.current.fit();
-            }, 100);
-        }
-    }, [isVisible, isInitialized]);
-
-    // Handle terminal visibility changes
-    useEffect(() => {
-        if (isVisible && isInitialized && !isCollapsed && fitAddon.current) {
-            setTimeout(() => {
-                fitAddon.current.fit();
-            }, 100);
-        }
-    }, [isVisible, isInitialized, isCollapsed]);
-
-    // Handle window resize
-    useEffect(() => {
         const handleResize = () => {
-            if (fitAddon.current && !isCollapsed) {
-                fitAddon.current.fit();
+            if (fitAddon && !xterm.disposed) {
+                fitAddon.fit();
             }
         };
 
         window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [isCollapsed]);
-
-    const startResize = (e) => {
-        isResizing.current = true;
-        document.body.style.cursor = 'ns-resize';
-    };
-
-    useEffect(() => {
-        const handleMouseMove = (e) => {
-            if (!isResizing.current) return;
-            const newHeight = window.innerHeight - e.clientY;
-            if (newHeight >= 100 && newHeight <= window.innerHeight * 0.8) {
-                setTerminalHeight(newHeight);
-                if (fitAddon.current) {
-                    setTimeout(() => fitAddon.current.fit(), 0);
-                }
-            }
-        };
-
-        const handleMouseUp = () => {
-            isResizing.current = false;
-            document.body.style.cursor = 'default';
-        };
-
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
 
         return () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('resize', handleResize);
+            window.electron.ipcRenderer.removeListener('terminal-output', handleOutput);
+            window.electron.ipcRenderer.removeListener('terminal-error', handleError);
+            if (xterm && !xterm.disposed) {
+                xterm.dispose();
+            }
         };
-    }, []);
-
-    const toggleCollapse = () => {
-        setIsCollapsed(!isCollapsed);
-    };
+    }, [isVisible, isCollapsed]);
 
     if (!isVisible) return null;
 
     return ( <
-        div className = { `fixed bottom-0 left-0 right-0 bg-gray-900 text-white transition-all duration-300 ease-in-out ${
-                isCollapsed ? 'h-10' : ''
-            }` }
+        div className = "fixed bottom-0 left-0 right-0 bg-gray-900 text-white transition-all duration-300 ease-in-out"
         style = {
-            { height: isCollapsed ? '40px' : `${terminalHeight}px` }
+            {
+                height: isCollapsed ? '40px' : `${terminalHeight}px`,
+                zIndex: 1000
+            }
         } >
         <
-        div ref = { resizeRef }
-        className = "absolute top-0 left-0 right-0 h-1 bg-gray-700 cursor-ns-resize"
-        onMouseDown = { startResize }
+        div className = "absolute top-0 left-0 right-0 h-1 bg-gray-700 cursor-ns-resize"
+        onMouseDown = {
+            (e) => {
+                const startY = e.clientY;
+                const startHeight = terminalHeight;
+
+                const handleMouseMove = (moveEvent) => {
+                    const delta = startY - moveEvent.clientY;
+                    const newHeight = Math.min(Math.max(startHeight + delta, 100), window.innerHeight * 0.8);
+                    setTerminalHeight(newHeight);
+                };
+
+                const handleMouseUp = () => {
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                };
+
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+            }
+        }
         /> <
         div className = "flex items-center justify-between p-2 bg-gray-800 border-b border-gray-700" >
         <
@@ -228,31 +197,62 @@ const TerminalComponent = ({ setIsVisible, isVisible }) => {
         <
         FaTerminal className = "text-green-500" / >
         <
-        span className = "font-semibold" > Terminal < /span> < /
-        div > <
+        span className = "font-semibold" > Terminal < /span> <
+        /div> <
         div className = "flex items-center space-x-2" >
         <
-        button onClick = { toggleCollapse }
-        className = "p-1 hover:bg-gray-700 rounded" > { isCollapsed ? < FaChevronUp / > : < FaChevronDown / > } <
+        button onClick = {
+            () => setIsCollapsed(!isCollapsed) }
+        className = "p-1 hover:bg-gray-700 rounded" >
+        { isCollapsed ? < FaChevronUp / > : < FaChevronDown / > } <
         /button> <
         button onClick = {
-            () => setIsVisible(false)
-        }
+            () => setIsVisible(false) }
         className = "p-1 hover:bg-gray-700 rounded" >
         <
         FaTimes / >
         <
-        /button> < /
-        div > <
+        /button> <
+        /div> <
         /div> <
         div ref = { terminalRef }
-        className = { `h-[calc(100%-40px)] ${isCollapsed ? 'hidden' : ''}` }
+        className = "terminal-container"
         style = {
-            { display: isCollapsed ? 'none' : 'block' }
+            {
+                height: isCollapsed ? '0' : 'calc(100% - 40px)',
+                width: '100%',
+                padding: '8px',
+                backgroundColor: '#1e1e1e',
+                overflow: 'hidden',
+                display: isCollapsed ? 'none' : 'block'
+            }
         }
-        /> < /
-        div >
+        onClick = {
+            () => {
+                if (xtermRef.current && !xtermRef.current.disposed) {
+                    xtermRef.current.focus();
+                }
+            }
+        }
+        /> <
+        style > { `
+                .terminal-container {
+                    display: flex;
+                    flex-direction: column;
+                }
+                .terminal-container .xterm {
+                    padding: 8px;
+                    height: 100%;
+                    width: 100%;
+                }
+                .terminal-container .xterm-viewport,
+                .terminal-container .xterm-screen {
+                    width: 100% !important;
+                    height: 100% !important;
+                }
+            ` } < /style> <
+        /div>
     );
 };
 
-export default TerminalComponent;
+export default Terminal;

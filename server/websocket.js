@@ -1,38 +1,44 @@
-const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
+const http = require('http');
+const server = http.createServer();
+const io = require('socket.io')(server, {
+    cors: {
+        origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+        methods: ["GET", "POST"],
+        credentials: true
+    }
+});
 
 class CollaborationServer {
     constructor(port = 8080) {
-        this.wss = new WebSocket.Server({ port });
-        this.clients = new Map(); // Map of client ID to WebSocket connection
+        this.clients = new Map(); // Map of client ID to socket connection
         this.documents = new Map(); // Map of document path to content
-        this.setupWebSocketServer();
+        this.setupSocketServer();
+        server.listen(port, () => {
+            console.log(`Collaboration server running on port ${port}`);
+        });
     }
 
-    setupWebSocketServer() {
-        this.wss.on('connection', (ws) => {
+    setupSocketServer() {
+        io.on('connection', (socket) => {
             const clientId = uuidv4();
-            this.clients.set(clientId, ws);
+            this.clients.set(clientId, socket);
 
-            ws.on('message', (message) => {
+            // Send client their ID
+            socket.emit('init', { clientId });
+
+            socket.on('message', (data) => {
                 try {
-                    const data = JSON.parse(message);
                     this.handleMessage(clientId, data);
                 } catch (error) {
                     console.error('Error handling message:', error);
                 }
             });
 
-            ws.on('close', () => {
+            socket.on('disconnect', () => {
                 this.clients.delete(clientId);
                 this.broadcastUserList();
             });
-
-            // Send client their ID
-            ws.send(JSON.stringify({
-                type: 'init',
-                clientId
-            }));
 
             this.broadcastUserList();
         });
@@ -86,13 +92,12 @@ class CollaborationServer {
         const document = this.documents.get(path);
 
         if (document) {
-            const ws = this.clients.get(clientId);
-            ws.send(JSON.stringify({
-                type: 'file_content',
+            const socket = this.clients.get(clientId);
+            socket.emit('file_content', {
                 path,
                 content: document.content,
                 version: document.version
-            }));
+            });
         }
     }
 
@@ -109,27 +114,18 @@ class CollaborationServer {
     }
 
     broadcast(senderId, data) {
-        this.clients.forEach((ws, clientId) => {
-            if (clientId !== senderId && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(data));
+        this.clients.forEach((socket, clientId) => {
+            if (clientId !== senderId) {
+                socket.emit('message', data);
             }
         });
     }
 
     broadcastUserList() {
         const users = Array.from(this.clients.keys());
-        const data = {
-            type: 'user_list',
-            users
-        };
-
-        this.clients.forEach((ws) => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(data));
-            }
-        });
+        io.emit('user_list', { users });
     }
 }
 
-const server = new CollaborationServer();
+const collaborationServer = new CollaborationServer();
 console.log('Collaboration server running on port 8080');

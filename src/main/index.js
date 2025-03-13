@@ -12,6 +12,7 @@ import { getCompileCommand, getRunCommand } from './utils/languageCommands';
 const ROOT_DIR = app.getPath('home');
 const PROJECT_DIR = process.cwd();
 let currentTerminal = null;
+let mainWindow = null;
 
 // Add handler for getting current directory
 ipcMain.handle('get-current-directory', () => {
@@ -153,9 +154,124 @@ ipcMain.handle('execute-code', async(event, filePath) => {
     }
 });
 
+function createTerminalProcess() {
+    if (currentTerminal) {
+        try {
+            currentTerminal.kill();
+        } catch (e) {
+            console.error('Error killing existing terminal:', e);
+        }
+        currentTerminal = null;
+    }
+
+    try {
+        // Set PowerShell encoding to UTF8 and change directory
+        const initCommand = `
+            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8;
+            [Console]::InputEncoding = [System.Text.Encoding]::UTF8;
+            Set-Location '${PROJECT_DIR.replace(/'/g, "''")}';
+            Write-Host "[PowerShell]>";
+        `;
+
+        currentTerminal = spawn('powershell.exe', [
+            '-NoLogo',
+            '-NoExit',
+            '-Command',
+            initCommand
+        ], {
+            env: process.env,
+            cwd: PROJECT_DIR,
+            shell: false,
+            windowsHide: false,
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        currentTerminal.stdout.on('data', (data) => {
+            console.log('Terminal output:', data.toString()); // Debug log
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('terminal-output', data.toString());
+            }
+        });
+
+        currentTerminal.stderr.on('data', (data) => {
+            console.error('Terminal error:', data.toString()); // Debug log
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('terminal-output', data.toString());
+            }
+        });
+
+        currentTerminal.on('error', (error) => {
+            console.error('Terminal process error:', error);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('terminal-output', `Error: ${error.message}\r\n`);
+            }
+        });
+
+        currentTerminal.on('exit', (code) => {
+            console.log('Terminal process exited with code:', code);
+            currentTerminal = null;
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                setTimeout(() => {
+                    createTerminalProcess();
+                }, 100);
+            }
+        });
+
+        return currentTerminal;
+    } catch (error) {
+        console.error('Failed to create terminal process:', error);
+        return null;
+    }
+}
+
+// Handle terminal creation
+ipcMain.on('terminal-create', (event) => {
+    try {
+        if (!currentTerminal) {
+            currentTerminal = createTerminalProcess();
+        }
+        if (!currentTerminal) {
+            event.sender.send('terminal-error', 'Failed to create terminal process\r\n');
+        }
+    } catch (error) {
+        console.error('Error creating terminal:', error);
+        event.sender.send('terminal-error', `Error creating terminal: ${error.message}\r\n`);
+    }
+});
+
+// Handle terminal input
+ipcMain.on('terminal-input', (event, data) => {
+    if (!currentTerminal) {
+        currentTerminal = createTerminalProcess();
+        if (!currentTerminal) {
+            event.reply('terminal-output', 'Error: Failed to create terminal\r\n');
+            return;
+        }
+    }
+
+    try {
+        if (data.trim() === '\x03') { // Ctrl+C
+            currentTerminal.kill('SIGINT');
+            return;
+        }
+
+        // Ensure proper line ending for PowerShell
+        const command = data.trim() + '\r\n';
+        console.log('Sending command to terminal:', command); // Debug log
+
+        if (!currentTerminal.stdin.write(command)) {
+            console.error('Failed to write to terminal stdin');
+            event.reply('terminal-output', 'Error: Failed to send command to terminal\r\n');
+        }
+    } catch (error) {
+        console.error('Error writing to terminal:', error);
+        event.reply('terminal-output', `Error: ${error.message}\r\n`);
+    }
+});
+
 function createWindow() {
     // Create the browser window.
-    const mainWindow = new BrowserWindow({
+    mainWindow = new BrowserWindow({
         width: 900,
         height: 670,
         show: false,
@@ -164,9 +280,8 @@ function createWindow() {
         webPreferences: {
             preload: join(__dirname, '../preload/index.js'),
             sandbox: false,
-            contextIsolation: true,
-            enableRemoteModule: false,
-            nodeIntegration: false,
+            nodeIntegration: true,
+            contextIsolation: true
         }
     });
 
@@ -187,39 +302,6 @@ function createWindow() {
 
     return mainWindow;
 }
-
-function createTerminalProcess() {
-    const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
-    const terminal = spawn(shell, [], {
-        cwd: ROOT_DIR,
-        env: process.env,
-        shell: true
-    });
-
-    return terminal;
-}
-
-// Handle terminal input with proper shell integration
-ipcMain.on('terminal-input', (event, command) => {
-    if (!currentTerminal) {
-        currentTerminal = createTerminalProcess();
-
-        currentTerminal.stdout.on('data', (data) => {
-            event.sender.send('terminal-output', data.toString());
-        });
-
-        currentTerminal.stderr.on('data', (data) => {
-            event.sender.send('terminal-error', data.toString());
-        });
-
-        currentTerminal.on('exit', (code) => {
-            event.sender.send('terminal-exit', code);
-            currentTerminal = null;
-        });
-    }
-
-    currentTerminal.stdin.write(command + os.EOL);
-});
 
 // Safe file operations within user's directory
 ipcMain.handle('load-files', async(event, dirPath) => {

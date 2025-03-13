@@ -7,8 +7,10 @@ import Navbar from './components/nav';
 import TerminalComponent from './components/Terminal';
 import StatusBar from './components/StatusBar';
 import CommandPalette from './components/CommandPalette';
+import { io } from 'socket.io-client';
 
-const WEBSOCKET_URL = 'ws://localhost:8080';
+const WEBSOCKET_URL = 'ws://127.0.0.1:8080';
+const SOCKETIO_URL = 'http://127.0.0.1:8080';
 
 const App = () => {
     const [content, setContent] = useState({
@@ -23,50 +25,78 @@ const App = () => {
     const [warningCount] = useState(0);
     const [connectedUsers, setConnectedUsers] = useState([]);
     const [clientId, setClientId] = useState(null);
+    const [wsConnected, setWsConnected] = useState(false);
     const fileExplorerRef = useRef(null);
-    const wsRef = useRef(null);
+    const socketRef = useRef(null);
     const documentVersion = useRef(Date.now());
 
     useEffect(() => {
-        connectWebSocket();
+        const connectSocket = () => {
+            try {
+                const socket = io(SOCKETIO_URL, {
+                    withCredentials: true,
+                    transports: ['websocket', 'polling']
+                });
+
+                socket.on('connect', () => {
+                    console.log('Connected to Socket.IO server');
+                    setWsConnected(true);
+                });
+
+                socket.on('disconnect', () => {
+                    console.log('Disconnected from Socket.IO server');
+                    setWsConnected(false);
+                    setTimeout(connectSocket, 3000);
+                });
+
+                socket.on('init', (data) => {
+                    setClientId(data.clientId);
+                });
+
+                socket.on('user_list', (data) => {
+                    setConnectedUsers(data.users);
+                });
+
+                socket.on('message', (data) => {
+                    handleSocketMessage(data);
+                });
+
+                socket.on('file_content', (data) => {
+                    if (selectedFile && data.path === selectedFile.path) {
+                        setContent(prev => ({
+                            ...prev,
+                            content: data.content
+                        }));
+                        documentVersion.current = data.version;
+                    }
+                });
+
+                socket.on('error', (error) => {
+                    console.error('Socket.IO error:', error);
+                    setWsConnected(false);
+                });
+
+                socketRef.current = socket;
+            } catch (error) {
+                console.error('Error connecting to Socket.IO server:', error);
+                setWsConnected(false);
+                setTimeout(connectSocket, 3000);
+            }
+        };
+
+        connectSocket();
+
         return () => {
-            if (wsRef.current) {
-                wsRef.current.close();
+            if (socketRef.current) {
+                socketRef.current.disconnect();
             }
         };
     }, []);
 
-    const connectWebSocket = () => {
-        const ws = new WebSocket(WEBSOCKET_URL);
-
-        ws.onopen = () => {
-            console.log('Connected to collaboration server');
-        };
-
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            handleWebSocketMessage(data);
-        };
-
-        ws.onclose = () => {
-            console.log('Disconnected from collaboration server');
-            // Attempt to reconnect after 3 seconds
-            setTimeout(connectWebSocket, 3000);
-        };
-
-        wsRef.current = ws;
-    };
-
-    const handleWebSocketMessage = (data) => {
+    const handleSocketMessage = (data) => {
         switch (data.type) {
-            case 'init':
-                setClientId(data.clientId);
-                break;
-            case 'user_list':
-                setConnectedUsers(data.users);
-                break;
             case 'code_change':
-                if (data.clientId !== clientId && data.path === (selectedFile && selectedFile.path)) {
+                if (data.clientId !== clientId && selectedFile && data.path === selectedFile.path) {
                     setContent(prev => ({
                         ...prev,
                         content: data.content
@@ -74,30 +104,20 @@ const App = () => {
                     documentVersion.current = data.version;
                 }
                 break;
-            case 'cursor_move':
-                // Handle other users' cursor positions
-                break;
-            case 'file_content':
-                if (data.path === (selectedFile && selectedFile.path)) {
-                    setContent(prev => ({
-                        ...prev,
-                        content: data.content
-                    }));
-                    documentVersion.current = data.version;
-                }
+            default:
                 break;
         }
     };
 
     const broadcastCodeChange = (newContent) => {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && selectedFile) {
+        if (socketRef.current && socketRef.current.connected && selectedFile) {
             documentVersion.current = Date.now();
-            wsRef.current.send(JSON.stringify({
+            socketRef.current.emit('message', {
                 type: 'code_change',
                 path: selectedFile.path,
                 content: newContent,
                 version: documentVersion.current
-            }));
+            });
         }
     };
 
@@ -109,7 +129,9 @@ const App = () => {
         if (content.name) {
             setSelectedFile({ name: content.name });
         }
+    }, [content]);
 
+    useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.ctrlKey && e.shiftKey && e.key === 'P') {
                 e.preventDefault();
@@ -126,40 +148,22 @@ const App = () => {
             }
         };
 
-        const handleNewFileEvent = () => {
-            if (fileExplorerRef.current) {
-                fileExplorerRef.current.addFile();
-            }
-        };
-
-        const handleOpenFileEvent = (event) => {
-            const { path, name } = event.detail;
-            handleFileOpen(path, name);
-        };
-
-        const handleOpenFolderEvent = (event) => {
-            const { path } = event.detail;
-            if (fileExplorerRef.current) {
-                fileExplorerRef.current.handleDirectoryClick(path);
-            }
-        };
-
         window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('new-file', handleNewFileEvent);
-        window.addEventListener('open-file', handleOpenFileEvent);
-        window.addEventListener('open-folder', handleOpenFolderEvent);
+        window.addEventListener('new-file', handleNewFile);
+        window.addEventListener('open-file', handleOpenFile);
+        window.addEventListener('open-folder', handleOpenFolder);
         window.addEventListener('save-file', handleSaveFile);
         window.addEventListener('save-file-as', handleSaveFileAs);
 
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('new-file', handleNewFileEvent);
-            window.removeEventListener('open-file', handleOpenFileEvent);
-            window.removeEventListener('open-folder', handleOpenFolderEvent);
+            window.removeEventListener('new-file', handleNewFile);
+            window.removeEventListener('open-file', handleOpenFile);
+            window.removeEventListener('open-folder', handleOpenFolder);
             window.removeEventListener('save-file', handleSaveFile);
             window.removeEventListener('save-file-as', handleSaveFileAs);
         };
-    }, [content]);
+    }, []);
 
     const handleFileOpen = async(filePath, fileName) => {
         try {
@@ -175,12 +179,11 @@ const App = () => {
             });
             setSelectedFile({ name: fileName, path: filePath });
 
-            // Notify other clients about file open
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({
+            if (socketRef.current && socketRef.current.connected) {
+                socketRef.current.emit('message', {
                     type: 'file_open',
                     path: filePath
-                }));
+                });
             }
         } catch (error) {
             console.error('Error opening file:', error);
@@ -207,7 +210,7 @@ const App = () => {
         try {
             const result = await window.api.showDialog({
                 title: 'Save As',
-                defaultPath: selectedFile ? selectedFile.path : undefined,
+                defaultPath: selectedFile && selectedFile.path,
                 filters: [{ name: 'All Files', extensions: ['*'] }],
                 properties: ['showOverwriteConfirmation']
             });
@@ -223,37 +226,6 @@ const App = () => {
             }
         } catch (error) {
             console.error('Error saving file:', error);
-        }
-    };
-
-    const handleCommandExecution = (commandId) => {
-        switch (commandId) {
-            case 'new-file':
-                handleNewFile();
-                break;
-            case 'open-file':
-                handleOpenFile();
-                break;
-            case 'open-folder':
-                handleOpenFolder();
-                break;
-            case 'save-file':
-                handleSaveFile();
-                break;
-            case 'run-code':
-                handleRunCode();
-                break;
-            case 'toggle-terminal':
-                setIsTerminalVisible(prev => !prev);
-                break;
-            case 'format-code':
-                handleFormatCode();
-                break;
-            case 'open-settings':
-                handleOpenSettings();
-                break;
-            default:
-                console.log('Unknown command:', commandId);
         }
     };
 
@@ -283,12 +255,30 @@ const App = () => {
         }
     };
 
-    const handleFormatCode = () => {
-        // Implement code formatting logic
-    };
-
-    const handleOpenSettings = () => {
-        // Implement settings dialog
+    const handleCommandExecution = (commandId) => {
+        switch (commandId) {
+            case 'new-file':
+                handleNewFile();
+                break;
+            case 'open-file':
+                handleOpenFile();
+                break;
+            case 'open-folder':
+                handleOpenFolder();
+                break;
+            case 'save-file':
+                handleSaveFile();
+                break;
+            case 'run-code':
+                handleRunCode();
+                break;
+            case 'toggle-terminal':
+                setIsTerminalVisible(prev => !prev);
+                break;
+            default:
+                console.log('Unknown command:', commandId);
+                break;
+        }
     };
 
     return ( <
@@ -327,13 +317,14 @@ const App = () => {
             errorCount = { errorCount }
             warningCount = { warningCount }
             connectedUsers = { connectedUsers }
+            wsConnected = { wsConnected }
             /> {
             isCommandPaletteOpen && ( <
                 CommandPalette isOpen = { isCommandPaletteOpen }
                 onClose = {
                     () => setIsCommandPaletteOpen(false)
                 }
-                onExecuteCommand = { handleCommandExecution }
+                onCommandSelect = { handleCommandExecution }
                 />
             )
         } <
